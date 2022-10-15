@@ -38,7 +38,7 @@ class LockFrame(wx.Frame):
     top_sizer.Add(sizer, 1, flag=wx.EXPAND)
 
     sizer.Add(wx.StaticText(panel, label='パスワード', style=wx.TE_LEFT), (0, 1), flag=wx.EXPAND | wx.ALIGN_CENTER)
-    password_textctrl = wx.TextCtrl(panel)
+    password_textctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
     self.password_textctrl = password_textctrl
     sizer.Add(password_textctrl, (0, 2), flag=wx.EXPAND | wx.ALL, border=10)
 
