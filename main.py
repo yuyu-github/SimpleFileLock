@@ -1,6 +1,4 @@
-import signal
 import subprocess
-import sys
 import tempfile
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
@@ -87,6 +85,14 @@ def unlock(path: str, newpath: str, decryption_key: bytes):
     else:
       wx.MessageBox('パスワードが間違っています', 'エラー')
       return False
+    
+def open_file(paths: list[str]):
+  unencrypted_files = []
+  for path in paths:
+    if os.path.isfile(path):
+      if os.path.splitext(path)[1] == '.sfl': UnlockFrame('edit', path).Show(True)
+      else: unencrypted_files.append(path)
+  if len(unencrypted_files) >= 1: LockFrame(unencrypted_files).Show(True)
 
 class SimpleFileLock(wx.App):
   def OnInit(self):
@@ -98,6 +104,7 @@ class StartFrame(wx.Frame):
     super().__init__(None, title='Simple File Lock', size=(300, 250))
     self.SetBackgroundColour('white')
     self.SetWindowStyle(wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+    self.SetDropTarget(FileDropTarget())
 
     panel = wx.Panel(self)
     sizer = wx.GridSizer(3, 1, (0, 0))
@@ -147,6 +154,13 @@ class StartFrame(wx.Frame):
       paths = dialog.GetPaths()
       for path in paths:
         UnlockFrame('edit', path).Show(True)
+        
+class FileDropTarget(wx.FileDropTarget):
+  def __init__(self): super().__init__()
+  
+  def OnDropFiles(self, x, y, filenames):
+    open_file(filenames)
+    return True
       
 class LockFrame(wx.Frame):
   def __init__(self, paths: list[str]):
@@ -205,7 +219,7 @@ class UnlockFrame(wx.Frame):
     self.path = path
     
     name = os.path.basename(path)
-    super().__init__(None, title=name + 'をアンロック', size=(400, 150))
+    super().__init__(None, title=name + 'を' + ('アンロック' if type == 'unlock' else '編集' if type == 'edit' else ''), size=(400, 150))
     self.SetBackgroundColour('white')
     self.SetWindowStyle(wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
     
