@@ -61,20 +61,58 @@ class SimpleFileLock(wx.App):
   
 class StartFrame(wx.Frame):
   def __init__(self):
-    super().__init__(None, title='Simple File Lock', size=(300, 200))
+    super().__init__(None, title='Simple File Lock', size=(300, 250))
     self.SetBackgroundColour('white')
     self.SetWindowStyle(wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+
+    panel = wx.Panel(self)
+    sizer = wx.GridSizer(3, 1, (0, 0))
+    panel.SetSizer(sizer)
     
-    select_file_button = wx.Button(self, label='ファイルを選択')
-    select_file_button.Bind(wx.EVT_BUTTON, self.on_select_file_button_pressed)
+    lock_file_button = wx.Button(panel, label='ファイルをロック')
+    lock_file_button.SetBackgroundColour('#F0F0F0')
+    lock_file_button.Bind(wx.EVT_BUTTON, self.on_lock_file_button_pressed)
+    sizer.Add(lock_file_button, flag=wx.GROW | wx.ALL, border=5)
     
-  def on_select_file_button_pressed(self, event):
+    unlock_file_button = wx.Button(panel, label='ファイルをアンロック')
+    unlock_file_button.SetBackgroundColour('#F0F0F0')
+    unlock_file_button.Bind(wx.EVT_BUTTON, self.on_unlock_file_button_pressed)
+    sizer.Add(unlock_file_button, flag=wx.GROW | wx.ALL, border=5)
+    
+    edit_file_button = wx.Button(panel, label='ファイルを編集')
+    edit_file_button.SetBackgroundColour('#F0F0F0')
+    edit_file_button.Bind(wx.EVT_BUTTON, self.on_edit_file_button_pressed)
+    sizer.Add(edit_file_button, flag=wx.GROW | wx.ALL, border=5)
+    
+  def on_lock_file_button_pressed(self, event):
     dialog = wx.FileDialog(self, 'ファイルの選択')
     dialog.SetWindowStyle(wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
-    dialog.SetWildcard('すべてのファイル(*.*)|*.*|SimpleFileLockファイル(*.sfl)|*.sfl|SimpleFileLock実行ファイル(*.runsfl)|*.runsfl')
+    dialog.SetWildcard('すべてのファイル(*.*)|*.*|SimpleFileLock実行ファイル(*.runsfl)|*.runsfl')
 
     if dialog.ShowModal() == wx.ID_OK:
-      open_file(dialog.GetPaths())
+      paths = dialog.GetPaths()
+      if len(paths) >= 1:
+        LockFrame(paths).Show(True)
+        
+  def on_unlock_file_button_pressed(self, event):
+    dialog = wx.FileDialog(self, 'ファイルの選択')
+    dialog.SetWindowStyle(wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
+    dialog.SetWildcard('SimpleFileLockファイル(*.sfl)|*.sfl')
+
+    if dialog.ShowModal() == wx.ID_OK:
+      paths = dialog.GetPaths()
+      if len(paths) >= 1:
+        pass
+        
+  def on_edit_file_button_pressed(self, event):
+    dialog = wx.FileDialog(self, 'ファイルの選択')
+    dialog.SetWindowStyle(wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
+    dialog.SetWildcard('SimpleFileLockファイル(*.sfl)|*.sfl')
+
+    if dialog.ShowModal() == wx.ID_OK:
+      paths = dialog.GetPaths()
+      if len(paths) >= 1:
+        pass
       
 class LockFrame(wx.Frame):
   def __init__(self, paths: list[str]):
