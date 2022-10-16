@@ -35,6 +35,13 @@ def encrypt(data: bytes, key: bytes, algorithm: EncryptionAlgorithm = DEFAULT_EN
       aes = AES.new(key, AES.MODE_CTR, counter=ctr)
       cipher = aes.encrypt(data)
       return (cipher, iv)
+    
+def lock(path, encryption_key, confirm_meta):
+  newpath = re.sub(r'\.runsfl$', '.sfl', path) if path.endswith('.runsfl') else path + '.sfl'
+  with open(path, 'rb') as org, open(newpath, 'wb') as locked:
+    (cipher, decryption_meta) = encrypt(len(confirm_meta).to_bytes(2, 'big') + confirm_meta + org.read(), encryption_key)
+    locked.write(DEFALUT_HASH_ALGORITHM.value.to_bytes(1, 'big') + DEFAULT_ENCRYPTION_ALGORITHM.value.to_bytes(1, 'big') + \
+      len(decryption_meta).to_bytes(2, 'big') + decryption_meta + cipher)
   
 def open_file(paths: list[str]):
   lock_files = []
@@ -108,24 +115,19 @@ class LockFrame(wx.Frame):
     
   def lock(self):
     hashed_password = hash(str(self.password_textctrl.GetValue()).encode()).to_bytes()
-    
+
     result = ConfirmPasswordDialog(hashed_password).ShowModal()
     if (result == wx.ID_CANCEL): self.Close()
     elif (result == wx.ID_NO): wx.MessageBox('パスワードが異なっています')
     elif (result == wx.ID_YES):
-      encryption_key = hashed_password
-      confirm_meta = encryption_key
       try:
         for path in self.paths:
-          newpath = re.sub(r'\.runsfl$', '.sfl', path) if path.endswith('.runsfl') else path + '.sfl'
-          with open(path, 'rb') as org, open(newpath, 'wb') as locked:
-            (cipher, decryption_meta) = encrypt(len(confirm_meta).to_bytes(2, 'big') + confirm_meta + org.read(), encryption_key)
-            locked.write(DEFALUT_HASH_ALGORITHM.value.to_bytes(1, 'big') + DEFAULT_ENCRYPTION_ALGORITHM.value.to_bytes(1, 'big') + \
-              len(decryption_meta).to_bytes(2, 'big') + decryption_meta + cipher)
+          encryption_key = hashed_password
+          confirm_meta = encryption_key
+          lock(path, encryption_key, confirm_meta)
       except Exception as e:
         wx.MessageBox(str(e), 'エラーが発生しました')
-      finally:
-        self.Close()
+      finally: self.Close()
     
 class ConfirmPasswordDialog(wx.Dialog):
   def __init__(self, hashed_password: bytes):
