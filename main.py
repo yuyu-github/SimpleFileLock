@@ -184,6 +184,11 @@ class LockFrame(wx.Frame):
     password_textctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
     self.password_textctrl = password_textctrl
     sizer.Add(password_textctrl, (0, 2), flag=wx.EXPAND | wx.ALL, border=10)
+    
+    delete_org_file_checkbox = wx.CheckBox(panel, label='元のファイルを削除')
+    delete_org_file_checkbox.SetValue(True)
+    self.delete_org_file_checkbox = delete_org_file_checkbox
+    sizer.Add(delete_org_file_checkbox, (1, 1), (1, 2), flag=wx.EXPAND)
 
     sizer.AddGrowableCol(2)
     
@@ -212,6 +217,7 @@ class LockFrame(wx.Frame):
         for path in self.paths:
           encryption_key = hashed_password
           lock(path, re.sub(r'\.runsfl$', '.sfl', path) if path.endswith('.runsfl') else path + '.sfl', encryption_key)
+          if self.delete_org_file_checkbox.GetValue(): os.remove(path)
       except Exception as e:
         wx.MessageBox(str(e), 'エラーが発生しました')
       finally: self.Close()
@@ -236,6 +242,12 @@ class UnlockFrame(wx.Frame):
     password_textctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
     self.password_textctrl = password_textctrl
     sizer.Add(password_textctrl, (0, 2), flag=wx.EXPAND | wx.ALL, border=10)
+    
+    if type == 'unlock':
+      delete_org_file_checkbox = wx.CheckBox(panel, label='元のファイルを削除')
+      delete_org_file_checkbox.SetValue(True)
+      self.delete_org_file_checkbox = delete_org_file_checkbox
+      sizer.Add(delete_org_file_checkbox, (1, 1), (1, 2), flag=wx.EXPAND)
 
     sizer.AddGrowableCol(2)
     
@@ -263,6 +275,7 @@ class UnlockFrame(wx.Frame):
     
       decryption_key = hashed_password
       unlock(self.path, re.sub(r'\.sfl$', '', self.path), decryption_key)
+      if self.delete_org_file_checkbox.GetValue(): os.remove(self.path)
     except Exception as e:
       wx.MessageBox(str(e), 'エラーが発生しました')
     finally: self.Close()
