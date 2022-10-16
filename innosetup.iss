@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "SimpleFileLock"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppExeName "main.exe"
 #define MyAppAssocName MyAppName + "ƒtƒ@ƒCƒ‹"
 #define MyAppAssocExt ".sfl"
