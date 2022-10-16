@@ -1,3 +1,7 @@
+import signal
+import subprocess
+import sys
+import tempfile
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
 from Crypto import Random
@@ -7,6 +11,10 @@ import os
 import re
 from typing import Callable
 import wx
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
+editing_files: dict[str, str] = {}
 
 class HashAlgorithm(Enum):
   SHA256 = 0
@@ -20,6 +28,14 @@ class _Hash:
   def __init__(self, to_bytes: Callable[[], bytes], to_string: Callable[[], str]):
     self.to_bytes = to_bytes
     self.to_string = to_string
+    
+class _FileEditEventHandler(FileSystemEventHandler):
+  def __init__(self): super().__init__()
+  
+  def on_modified(self, event):
+    path = event.src_path
+    if path in editing_files:
+      lock(path, editing_files[path][0], editing_files[path][1])
   
 def hash(data: bytes, algorithm: HashAlgorithm = DEFALUT_HASH_ALGORITHM):
   match algorithm:
@@ -45,17 +61,15 @@ def decrypt(cipher: bytes, key: bytes, decryption_meta: bytes, algorithm: Encryp
       data = aes.decrypt(cipher)
       return data
     
-def lock(path, encryption_key):
+def lock(path: str, newpath:str, encryption_key: bytes):
   confirm_meta = encryption_key
   
-  newpath = re.sub(r'\.runsfl$', '.sfl', path) if path.endswith('.runsfl') else path + '.sfl'
   with open(path, 'rb') as org, open(newpath, 'wb') as locked:
     (cipher, decryption_meta) = encrypt(len(confirm_meta).to_bytes(2, 'big') + confirm_meta + org.read(), encryption_key)
     locked.write(DEFALUT_HASH_ALGORITHM.value.to_bytes(1, 'big') + DEFAULT_ENCRYPTION_ALGORITHM.value.to_bytes(1, 'big') + \
       len(decryption_meta).to_bytes(2, 'big') + decryption_meta + cipher)
 
-def unlock(path, decryption_key):
-  newpath = re.sub(r'\.sfl$', '', path)
+def unlock(path: str, newpath: str, decryption_key: bytes):
   with open(path, 'rb') as locked, open(newpath, 'wb') as org:
     locked.seek(1)
     encryption_algorithm = EncryptionAlgorithm(int.from_bytes(locked.read(1), 'big'))
@@ -69,19 +83,10 @@ def unlock(path, decryption_key):
 
     if confirm_meta == decryption_key:
       org.write(data[2+confirm_meta_len:])
+      return True
     else:
       wx.MessageBox('パスワードが間違っています', 'エラー')
-  
-def open_file(paths: list[str]):
-  lock_files = []
-  unlock_files = []
-  
-  for path in paths:
-    ext = os.path.splitext(path)[1]
-    if ext == '.sfl': unlock_files.append(path)
-    else: lock_files.append(path)
-    
-  if len(lock_files) >= 1: LockFrame(lock_files).Show(True)
+      return False
 
 class SimpleFileLock(wx.App):
   def OnInit(self):
@@ -131,7 +136,7 @@ class StartFrame(wx.Frame):
     if dialog.ShowModal() == wx.ID_OK:
       paths = dialog.GetPaths()
       for path in paths:
-        UnlockFrame(path).Show(True)
+        UnlockFrame('unlock', path).Show(True)
         
   def on_edit_file_button_pressed(self, event):
     dialog = wx.FileDialog(self, 'ファイルの選択')
@@ -140,8 +145,8 @@ class StartFrame(wx.Frame):
 
     if dialog.ShowModal() == wx.ID_OK:
       paths = dialog.GetPaths()
-      if len(paths) >= 1:
-        pass
+      for path in paths:
+        UnlockFrame('edit', path).Show(True)
       
 class LockFrame(wx.Frame):
   def __init__(self, paths: list[str]):
@@ -190,13 +195,13 @@ class LockFrame(wx.Frame):
       try:
         for path in self.paths:
           encryption_key = hashed_password
-          lock(path, encryption_key)
+          lock(path, re.sub(r'\.runsfl$', '.sfl', path) if path.endswith('.runsfl') else path + '.sfl', encryption_key)
       except Exception as e:
         wx.MessageBox(str(e), 'エラーが発生しました')
       finally: self.Close()
       
 class UnlockFrame(wx.Frame):
-  def __init__(self, path: str):
+  def __init__(self, type, path: str):
     self.path = path
     
     name = os.path.basename(path)
@@ -222,7 +227,7 @@ class UnlockFrame(wx.Frame):
     top_sizer.Add(btn_sizer, flag=wx.EXPAND | wx.ALL, border=10)
 
     lock_btn = wx.Button(panel, wx.ID_OK, label='アンロック')
-    lock_btn.Bind(wx.EVT_BUTTON, lambda event: self.unlock())
+    lock_btn.Bind(wx.EVT_BUTTON, lambda event: self.unlock() if type == 'unlock' else self.edit() if type == 'edit' else None)
     lock_btn.SetDefault()
     btn_sizer.AddButton(lock_btn)
     
@@ -241,7 +246,25 @@ class UnlockFrame(wx.Frame):
       hashed_password = hash(str(self.password_textctrl.GetValue()).encode(), hash_algorithm).to_bytes()
     
       decryption_key = hashed_password
-      unlock(self.path, decryption_key)
+      unlock(self.path, re.sub(r'\.sfl$', '', self.path), decryption_key)
+    except Exception as e:
+      wx.MessageBox(str(e), 'エラーが発生しました')
+    finally: self.Close()
+    
+  def edit(self):
+    try:
+      f = open(self.path, 'rb')
+      f.seek(0)
+      hash_algorithm = HashAlgorithm(int.from_bytes(f.read(1), 'big'))
+      f.close()
+      hashed_password = hash(str(self.password_textctrl.GetValue()).encode(), hash_algorithm).to_bytes()
+    
+      (name, ext) = os.path.splitext(os.path.splitext(os.path.basename(self.path))[0])
+      tempfile_path = tempfile.NamedTemporaryFile(prefix=name + '_', suffix=ext).name
+    
+      decryption_key = hashed_password
+      if unlock(self.path, tempfile_path, decryption_key):
+        EditFrame(self.path, tempfile_path, decryption_key).Show(True)
     except Exception as e:
       wx.MessageBox(str(e), 'エラーが発生しました')
     finally: self.Close()
@@ -274,6 +297,44 @@ class ConfirmPasswordDialog(wx.Dialog):
     
     btn_sizer.Realize()
     
+class EditFrame(wx.Frame):
+  def __init__(self, file_path: str, tempfile_path: str, encryption_key: str):
+    self.tempfile_path = tempfile_path
+    
+    super().__init__(None, title=os.path.basename(file_path) + 'の編集', size=(280, 70))
+    self.SetBackgroundColour('white')
+    self.SetWindowStyle(wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+    self.Bind(wx.EVT_CLOSE, self.on_close)
+    
+    panel = wx.Panel(self)
+    sizer = wx.BoxSizer(wx.HORIZONTAL)
+    panel.SetSizer(sizer)
+    
+    open_btn = wx.Button(panel, wx.ID_OK, label='既定のプログラムで開く')
+    open_btn.Bind(wx.EVT_BUTTON, lambda event: subprocess.Popen(['start', tempfile_path], shell=True))
+    sizer.Add(open_btn, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+    
+    end_btn = wx.Button(panel, wx.ID_CLOSE, label='編集を終了')
+    end_btn.Bind(wx.EVT_BUTTON, lambda event: self.Close())
+    sizer.Add(end_btn, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+    
+    editing_files[tempfile_path] = (file_path, encryption_key)
+    
+  def on_close(self, event):
+    editing_files.pop(self.tempfile_path)
+    os.remove(self.tempfile_path)
+    self.Destroy()
+    
 if __name__ == '__main__':
-  app = SimpleFileLock()
-  app.MainLoop()
+  try:
+    observer = Observer()
+    observer.schedule(_FileEditEventHandler(), tempfile.gettempdir(), recursive=True)
+    observer.start()
+    
+    app = SimpleFileLock()
+    app.MainLoop()
+    
+    observer.stop()
+    observer.join()
+  finally:
+    for i in editing_files.keys(): os.remove(i)
