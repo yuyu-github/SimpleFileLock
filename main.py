@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import tempfile
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
@@ -96,7 +97,8 @@ def open_file(paths: list[str]):
 
 class SimpleFileLock(wx.App):
   def OnInit(self):
-    StartFrame().Show(True)
+    if len(sys.argv) > 1: open_file([sys.argv[1]])
+    else: StartFrame().Show(True)
     return True
   
 class StartFrame(wx.Frame):
@@ -341,11 +343,12 @@ class EditFrame(wx.Frame):
     
 if __name__ == '__main__':
   try:
+    app = SimpleFileLock()
+
     observer = Observer()
     observer.schedule(_FileEditEventHandler(), tempfile.gettempdir(), recursive=True)
     observer.start()
-    
-    app = SimpleFileLock()
+
     app.MainLoop()
     
     observer.stop()
